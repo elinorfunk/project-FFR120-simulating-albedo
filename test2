@@ -1,0 +1,83 @@
+import numpy as np
+from tkinter import *
+from PIL import Image, ImageFilter
+from PIL import ImageTk as itk
+import time
+
+def temp_changes(temp, amp, f, t):
+    return amp * np.sin(2 * np.pi * f * t) + temp
+
+def seasonal_variation(f_seasonal, t):
+    return 0.5 * np.sin(2 * np.pi * f_seasonal * t)
+
+def get_neighbors(row, col, N):
+    directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+    return [(row + dr, col + dc) for dr, dc in directions if 0 <= row + dr < N and 0 <= col + dc < N]
+
+# Parameters
+N = 16
+temp = 273.15  # Set initial temperature in Kelvin
+time_steps = 100
+n = 500
+
+# Melting and freezing points of ice in Kelvin
+melting_point = 275.15
+freezing_point = 274.15  # Set your desired freezing point
+
+# Energy variables
+initial_energy = 100.0
+energy = initial_energy
+melting_energy = 10.0
+freezing_energy = 10.0
+
+# Create the window for animation
+window = Toplevel()
+window.geometry(str(int(n * 1.2)) + "x" + str(int(n * 1.2)))
+window.configure(background='white')
+canvas = Canvas(window, width=500, height=500, bd=2)
+canvas.pack()
+
+# Create initial grid
+ice_block = np.zeros((N, N))
+ice_block_im = np.zeros((N, N, 3))
+
+mid_row = N // 2
+mid_col = N // 2
+ice_block[mid_row, mid_col] = 1
+
+amp = 1
+f = 0.5
+f_seasonal = 0.1  # Adjust the seasonal frequency
+
+for time_step in range(time_steps):
+    temp = temp_changes(temp, amp, f, time_step) + seasonal_variation(f_seasonal, time_step)
+
+    row_indices, col_indices = np.where(ice_block == 1)
+    neighbors = [(row, col, get_neighbors(row, col, N)) for row, col in zip(row_indices, col_indices)]
+
+    for row, col, neighbor_coords in neighbors:
+        for neighbor_row, neighbor_col in neighbor_coords:
+            # If it's warmer than melting point and there's enough energy, melt
+            if temp > melting_point and energy >= melting_energy and np.random.rand() < 0.3:
+                ice_block[neighbor_row, neighbor_col] = 0
+                energy -= melting_energy
+            # If it's colder than freezing point and there's enough energy, freeze
+            elif temp < freezing_point and energy >= freezing_energy and np.random.rand() < 0.3:
+                ice_block[neighbor_row, neighbor_col] = 1
+                energy -= freezing_energy
+
+    ice_block_im[:, :, :] = 255
+    ice_block_im[:, :, 2] = np.clip((temp - melting_point) / 10, 0, 255)  # Red channel
+    ice_block_im[:, :, 0] = np.clip((freezing_point - temp) / 10, 0, 255)  # Blue channel
+
+    forest_image = Image.fromarray(np.uint8(ice_block_im), 'RGB').resize((n, n), Image.NEAREST)
+    image_sharp = forest_image.filter(ImageFilter.SHARPEN)
+    img_sharp2 = itk.PhotoImage(image_sharp)
+    img = itk.PhotoImage(forest_image)
+    canvas.create_image(0, 0, anchor=NW, image=img)
+    window.title(f"Ice block with temp = {temp:.2f} K | Energy = {energy:.2f} at time step {time_step}")
+    window.update()
+    time.sleep(0.5)
+
+window.quit()
+window.destroy()

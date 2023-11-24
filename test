@@ -1,0 +1,59 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
+# Constants
+grid_size = 20
+initial_ice_fraction = 0.2  # Fraction of initially ice-covered area
+melting_rate = 0.05  # Fraction of ice melting per timestep
+freezing_chance = 0.005  # Chance of a non-ice-covered area turning back into ice per timestep
+conduction_chance = 0.1  # Chance of a non-ice-covered area gaining enough energy to melt neighboring areas
+
+# Initialize grid
+grid = np.zeros((grid_size, grid_size))
+
+# Set initially ice-covered area in the middle
+ice_start = int(grid_size / 2 - initial_ice_fraction * grid_size / 2)
+ice_end = int(grid_size / 2 + initial_ice_fraction * grid_size / 2)
+grid[:, ice_start:ice_end] = 1
+
+# Plot initialization
+fig, ax = plt.subplots()
+img = ax.imshow(grid, cmap='cool', interpolation='nearest')
+
+# Update function for animation
+def update(frame):
+    global grid
+    new_grid = np.copy(grid)
+
+    # Iterate over each cell
+    for i in range(grid_size):
+        for j in range(grid_size):
+            # Check if the cell is ice-covered
+            if grid[i, j] == 1:
+                # Apply melting
+                if np.random.rand() < melting_rate:
+                    new_grid[i, j] = 0
+            else:
+                # Apply freezing with a certain chance
+                if np.random.rand() < freezing_chance:
+                    new_grid[i, j] = 1
+
+                # Apply conduction with a certain chance
+                if np.random.rand() < conduction_chance:
+                    # Nearest neighbors
+                    neighbors = [(i-1, j), (i+1, j), (i, j-1), (i, j+1)]
+                    for ni, nj in neighbors:
+                        # Check bounds
+                        if 0 <= ni < grid_size and 0 <= nj < grid_size:
+                            # If the neighboring cell is ice-covered, transfer energy
+                            if grid[ni, nj] == 1:
+                                new_grid[ni, nj] = 0
+
+    grid = np.copy(new_grid)
+    img.set_array(grid)
+    return img,
+
+# Create animation
+ani = animation.FuncAnimation(fig, update, frames=200, interval=100, blit=True)
+plt.show()
