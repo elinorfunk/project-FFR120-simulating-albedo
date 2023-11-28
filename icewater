@@ -1,0 +1,97 @@
+
+import numpy as np 
+from tkinter import *
+from PIL import Image, ImageFilter
+from PIL import ImageTk as itk
+import time
+import random
+
+def temp_changes(temp, amp, f, t): 
+
+    return amp * np.sin(2 * np.pi * f * t) + temp
+# Parameters 
+
+# Grid size 
+N = 16
+temp = 0
+albedo = 0 
+time_steps = 100
+# Add heat flux Q 
+
+# Resolution for animation 
+n = 500
+
+
+# Create the window for animation
+window = Toplevel()
+window.geometry(str(int(n*1.2)) + "x" + str(int(n*1.2)))
+window.configure(background = 'white')
+canvas = Canvas(window, width=500, height=500, bd=2)  
+canvas.pack()          
+
+# Create inital grid 
+ice_block = np.zeros((N,N))  
+ice_block_im = np.zeros((N,N,3))  
+
+mid_row = N // 2
+mid_col = N // 2
+
+# Set 1s in the middle of the grid
+ice_block[mid_row, mid_col] = 1     
+
+amp = 1
+f = 0.5
+melt_prob = 0.3
+
+for time_step in range(time_steps):
+
+    # Update temp 
+
+    temp = temp_changes(temp, amp, f, time_step)
+    print(temp)
+
+    neighbours = []
+    directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+
+    row_indices, col_indices = np.where(ice_block == 1)
+
+    for row, col in zip(row_indices, col_indices):
+        for dr, dc in directions:
+            new_row, new_col = row + dr, col + dc
+
+            # Check if the new coordinates are within the grid boundaries
+            if 0 <= new_row < N and 0 <= new_col < N:
+                neighbours.append((new_row, new_col))
+
+    if temp > 0:
+        # The ones next to a zero should turn to zero with a melting probability of 0.3
+        for neighbor_row, neighbor_col in neighbours:
+            Q_melt=Lf*m_ice
+            Tf=(m_water*CP_water*T_water+m_ice*C_ice*T_ice-Q_melt-(albedo_ice+albedo_water))/((m_water*C_water+m_ice*C_ice)*
+            if Tf > 0 
+                ice_block[neighbor_row, neighbor_col] = 0
+
+    if temp < 0:
+        # The ones next to a zero should turn to one
+        for neighbor_row, neighbor_col in neighbours:
+            ice_block[neighbor_row, neighbor_col] = 1
+
+    # Animation 
+    ice_block_im[:, :, :] = 255 
+    ice_block_im[:, :, 0] = (ice_block == 1) * 255
+
+    forest_image = Image.fromarray(np.uint8(ice_block_im), 'RGB').resize((n,n), Image.NEAREST)
+    image_sharp = forest_image.filter(ImageFilter.SHARPEN)
+    img_sharp2 = itk.PhotoImage(image_sharp)
+    img = itk.PhotoImage(forest_image)
+    canvas.create_image(0, 0, anchor = NW, image = img) 
+    window.title(f"Ice block with temp = {temp} at time step {time_step}")
+
+    window.update()
+
+    # If there is a fire burning, wait 
+    time.sleep(0.5)
+        
+    
+window.quit()
+window.destroy() 
