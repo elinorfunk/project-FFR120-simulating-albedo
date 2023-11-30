@@ -6,14 +6,14 @@ from PIL import ImageTk as itk
 import time
 import random
 
-def temp_changes(temp, amp, f, t): 
+def T_changes(T, amp, f, t): 
 
-    return amp * np.sin(2 * np.pi * f * t) + temp
+    return amp * np.sin(2 * np.pi * f * t) + T
 # Parameters 
 
 # Grid size 
 N = 16
-temp = 0
+T = 0
 albedo = 0 
 time_steps = 100
 # Add heat flux Q 
@@ -38,17 +38,17 @@ mid_col = N // 2
 
 # Set 1s in the middle of the grid
 ice_block[mid_row, mid_col] = 1     
-
+T=[]# add a matrix with initial T
 amp = 1
 f = 0.5
 melt_prob = 0.3
 
 for time_step in range(time_steps):
 
-    # Update temp 
+    # Update T 
 
-    temp = temp_changes(temp, amp, f, time_step)
-    print(temp)
+    T = T_changes(T, amp, f, time_step)
+    print(T)
 
     neighbours = []
     directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
@@ -63,19 +63,48 @@ for time_step in range(time_steps):
             if 0 <= new_row < N and 0 <= new_col < N:
                 neighbours.append((new_row, new_col))
 
-    if temp > 0:
-        # The ones next to a zero should turn to zero with a melting probability of 0.3
-        for neighbor_row, neighbor_col in neighbours:
-            Q_melt=Lf*m_ice
-            Tf=(m_water*CP_water*T_water+m_ice*C_ice*T_ice-Q_melt-(albedo_ice+albedo_water))/((m_water*C_water+m_ice*C_ice)*
-            if Tf > 0 
-                ice_block[neighbor_row, neighbor_col] = 0
+        if ice_block[row, col] ==0: #water
+            for neighbor_row, neighbor_col in neighbours: 
+                if ice_block[neighbor_row, neighbor_col] ==0:
+                    Q_melt=0
+                    Tf=(m_water*CP_water*(T[row, col]+T[neighbor_row, neighbor_col])-Q_melt-radiation)/(m_water*C_water+m_ice*C_ice)
+                    T[row, col]=Tf#add it to the matrix at that spot
+                    T[neighbor_row, neighbor_col]=Tf#add it to the matrix at that spot
+                    # They don't switch phase 
+                else :
+                    Q_melt=Lf*m_ice
+                    Tf=(m_water*CP_water*T[row, col]+m_ice*C_ice*T[neighbor_row, neighbor_col]-Q_melt-radiation)/(m_water*C_water+m_ice*C_ice)
+                    T[row, col]=Tf#add it to the matrix at that spot
+                    T[neighbor_row, neighbor_col]=Tf#add it to the matrix at that spot
+                    # They switch phase
+                    if Tf > 0 :
+                        ice_block[neighbor_row, neighbor_col] = 0
+                        ice_block[row, col] = 0
+                    else :
+                        ice_block[neighbor_row, neighbor_col] = 1
+                        ice_block[row, col] = 1
 
-    if temp < 0:
-        # The ones next to a zero should turn to one
-        for neighbor_row, neighbor_col in neighbours:
-            ice_block[neighbor_row, neighbor_col] = 1
-
+        else :   # ice
+            for neighbor_row, neighbor_col in neighbours:
+                if ice_block[neighbor_row, neighbor_col] ==1:
+                    Q_melt=0
+                    Tf=(m_ice*C_ice*(T[row, col]+T[neighbor_row, neighbor_col])-Q_melt-radiation)/(2*m_ice*C_ice)
+                    T[row, col]=Tf#add it to the matrix at that spot
+                    T[neighbor_row, neighbor_col]=Tf#add it to the matrix at that spot
+                    # They don't switch phase 
+                else :
+                    Q_melt=Lf*m_ice
+                    Tf=(m_water*CP_water*T[neighbor_row, neighbor_col]+m_ice*C_ice*T[row, col]-Q_melt-radiation)/(m_water*C_water+m_ice*C_ice)
+                    T[row, col]=Tf#add it to the matrix at that spot
+                    T[neighbor_row, neighbor_col]=Tf#add it to the matrix at that spot
+                    # They switch phase
+                    if Tf > 0 :
+                        ice_block[neighbor_row, neighbor_col] = 0
+                        ice_block[row, col] = 0
+                    else :
+                        ice_block[neighbor_row, neighbor_col] = 1
+                        ice_block[row, col] = 1
+                 
     # Animation 
     ice_block_im[:, :, :] = 255 
     ice_block_im[:, :, 0] = (ice_block == 1) * 255
@@ -85,13 +114,32 @@ for time_step in range(time_steps):
     img_sharp2 = itk.PhotoImage(image_sharp)
     img = itk.PhotoImage(forest_image)
     canvas.create_image(0, 0, anchor = NW, image = img) 
-    window.title(f"Ice block with temp = {temp} at time step {time_step}")
+    window.title(f"Ice block with T = {T} at time step {time_step}")
 
     window.update()
 
     # If there is a fire burning, wait 
     time.sleep(0.5)
-        
+
+
+# determine/ find values of CP, m, determine functions for radiation of albedo contribuation 
+# Change the system to add new T for all areas at temp and t_granne 
+
+#-- what happens to temp between neighbors, does it change everytime --> yes
+#---> so every interaction changes the temperature of the two blocks. 
+
+#Every interaction leads to the coordinate changes to that Tf and also changes 
+# the neighbors temperature to Tf. 
+m_water
+CP_water      
+m_ice    
+C_ice 
+Q_melt=Lf*m_ice
+albedo_ice
+albedo_water   
+
+T_water    
+T_ice    
     
 window.quit()
 window.destroy() 
