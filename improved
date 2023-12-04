@@ -18,7 +18,7 @@ def initialize_system(size, percent_ice):
     # Set the lower temperature in the square area
     system[start_row:end_row, start_col:end_col] = 273 - 2
     
-    print(system)
+
     return system
 
 #Creates a sizexsize system with an iceblock covering "partial_icebit" of the system
@@ -35,12 +35,12 @@ def initialize_ice(size, partial_icebit):
     # Set 1s in the square area
     ice[start_row:end_row, start_col:end_col] = 1
     
-    print(ice)
     return ice
 
 
 def temperature_changes(T, amp, f, t):
-    return amp * np.sin(2 * np.pi * f * t) + T
+    change=187
+    return amp-np.abs(change*np.sin( np.pi * t*2/12))
 
 # For a given time step each cell is periodically interacts with it's neighbors.
 # The interaction: all neighbor blocks are summed into 1 block and the energy-function
@@ -51,42 +51,62 @@ def temperature_changes(T, amp, f, t):
 #-----
 #everything is water after the first step
 #-----
-def update_temperature(T, ice, air_temp, time_step):
+def update_temperature(T, ice, solarenergy, time_step):
     directions = np.array([[-1, 0], [0, -1], [0, 1], [1, 0]])
     row_indices, col_indices = len(T), len(T[0])
     
     T_new = np.zeros_like(T)
     ice_new = np.zeros_like(ice)
-    air_temp = temperature_changes(air_temp, amp, f, time_step)
+    solarenergy = temperature_changes(solarenergy, amp, f, time_step)
 
     for row in range(row_indices):
         for col in range(col_indices):
 
             dr = (row + directions[:, 0]) % N
             dc = (col + directions[:, 1]) % N
+
+            CPm=np.zeros(4)
+            rad=np.zeros(4)
+            for i in range(4):
+                # Calculate the coordinates of the neighbor
+                neighbor_row = dr[i]
+                neighbor_col = dc[i]
+                
+                # Check the temperature at the neighbor
+                if T[neighbor_row, neighbor_col] <= 273:
+                    CPm[i] = Cp_ice * m_ice
+                    rad[i] = 100
+                else:
+                    CPm[i] = Cp_water * m_water
+                    rad[i] = 1000
+
+            # Calculate the average value for neighbors
+            avg_neighbour_rad = np.sum(rad) / 4
+            avg_neighbour_mCp = np.sum(CPm) / 4
             avg_neighbour_temp = np.sum(T[dr, dc]) / 4
 
-            # Chooses the correct radiation, m, Cp and Q_phase
+            # Chooses the correct radb, m, Cp and Q_phase
             #----
             # For now avg T, Cp, m
             #----
+            
             if avg_neighbour_temp > 273 and T[row, col] <= 273: #ice and water interaction -->  melting
                 Q_phase = m_ice * Lf
-                Radiation = 1
+                radb = 100
                 albedo = 0.99
                 mb, Cpb = m_ice, Cp_ice
             elif avg_neighbour_temp <= 273 and T[row, col] > 273: #ice and water interaction -->  freezing
-                Radiation = 2
+                radb = 1000
                 Q_phase = m_water * Lf
                 albedo = 0.3
                 mb, Cpb = m_water, Cp_water
             elif avg_neighbour_temp and T[row, col] <= 273: #both are ice --> no melting
-                Radiation = 3
+                radb = 100
                 Q_phase = 0
                 albedo = 0.99
                 mb, Cpb = m_ice, Cp_ice
             elif avg_neighbour_temp and T[row, col] > 273: #both are water --> no freezing
-                Radiation = 4
+                radb = 1000
                 Q_phase = 0
                 albedo = 0.3
                 mb, Cpb = m_water, Cp_water
@@ -94,27 +114,27 @@ def update_temperature(T, ice, air_temp, time_step):
             albedo_temp = (S / (4 * sigma) * (1 - albedo)) ** (1 / 4)
 
 
-            avg_neighbour_mCp=(2*Cp_ice*m_ice+2*Cp_water*m_water)/4    
+                
             cell=Cpb * mb * T[row, col]
             avg_neighbour=avg_neighbour_temp * avg_neighbour_mCp
-            #print(T)
-            #print(avg_neighbour_temp)
-            #print(cell)
-            #print(Q_phase)
-            #print(Cpb * mb + avg_neighbour_mCp)
-            Tf = (cell + avg_neighbour - Q_phase - Radiation) / (
+
+            Tf = (cell + avg_neighbour - Q_phase + radb+avg_neighbour_rad) / (
                         Cpb * mb + avg_neighbour_mCp)
-            
+            print(cell)
+            print(avg_neighbour)
+            print(avg_neighbour_mCp)
+            print(solarenergy)
+            print(Q_phase)
             T_new[row, col] = Tf
             ice_new[row, col] = 0 if Tf > 273 else 1
-        #print(T_new)
-    return T_new, ice_new, air_temp
+
+    return T_new, ice_new, solarenergy
 
 def animate_simulation():
-    global T, ice, amp, f, air_temp
+    global T, ice, amp, f, solarenergy
 
     for time_step in range(time_steps):
-        T, ice, air_temp = update_temperature(T, ice, air_temp, time_step)
+        T, ice, solarenergy = update_temperature(T, ice, solarenergy, time_step)
 
         # Set colors for ice and water
         ice_color = 'white'  # Set the color for ice (white)
@@ -135,16 +155,16 @@ def animate_simulation():
         img_sharp2 = itk.PhotoImage(image_sharp)
         img = itk.PhotoImage(ice_image)
         canvas.create_image(0, 0, anchor=NW, image=img)
-        window.title(f"Ice block with T = {air_temp} at time step {time_step}")
+        window.title(f"Ice block with T = {solarenergy} at time step {time_step}")
         window.update()
         time.sleep(0.5)
 
 # Simulation parameters
 N = 20
-time_steps = 20
+time_steps = 200
 n = 500
-amp, f, S, sigma = 10000, 10, 1364, 5.67 * 10**(-8)
-air_temp = 273
+amp, f, S, sigma = 204, 10, 1364, 5.67 * 10**(-8)
+solarenergy = 273
 Cp_water, Cp_ice, m_ice, m_water, Lf = 4186, 2.108, 917, 1000, 334
 
 # Create the window for animation
@@ -158,8 +178,6 @@ canvas.pack()
 partial_icebit=2
 T = initialize_system(N,partial_icebit)
 ice = initialize_ice(N,partial_icebit)
-print(T)
-print(ice)
 # Set up colormap
 cmap = LinearSegmentedColormap.from_list('rg', ["w", "blue"], N=256)
 
