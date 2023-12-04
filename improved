@@ -37,27 +37,21 @@ def initialize_ice(size, partial_icebit):
     
     return ice
 
-
+# needs to be scaled so that the daily energytransfer matches the conduction. 
 def temperature_changes(T, amp, f, t):
     change=187
-    return amp-np.abs(change*np.sin( np.pi * t*2/12))
+    return (amp-np.abs(change*np.sin( np.pi * t*2/100)))*(60*60*24)
 
 # For a given time step each cell is periodically interacts with it's neighbors.
 # The interaction: all neighbor blocks are summed into 1 block and the energy-function
 # over the heatexchange is used to find their common temperature after the exchange.
-#-----
-# Cp and m is incorrect for the neighbors now. We need to sort so that the correct sum 
-# of mCp for every neighbor is correct 
-#-----
-#everything is water after the first step
-#-----
-def update_temperature(T, ice, solarenergy, time_step):
+def update_temperature(T, ice, solarenergy, time):
     directions = np.array([[-1, 0], [0, -1], [0, 1], [1, 0]])
     row_indices, col_indices = len(T), len(T[0])
     
     T_new = np.zeros_like(T)
     ice_new = np.zeros_like(ice)
-    solarenergy = temperature_changes(solarenergy, amp, f, time_step)
+    solarenergy = temperature_changes(solarenergy, amp, f, time)
 
     for row in range(row_indices):
         for col in range(col_indices):
@@ -75,10 +69,10 @@ def update_temperature(T, ice, solarenergy, time_step):
                 # Check the temperature at the neighbor
                 if T[neighbor_row, neighbor_col] <= 273:
                     CPm[i] = Cp_ice * m_ice
-                    rad[i] = 100
+                    rad[i] = solarenergy*0.08 #absorption of ice
                 else:
                     CPm[i] = Cp_water * m_water
-                    rad[i] = 1000
+                    rad[i] = solarenergy*0.6 #absorption of water
 
             # Calculate the average value for neighbors
             avg_neighbour_rad = np.sum(rad) / 4
@@ -92,39 +86,27 @@ def update_temperature(T, ice, solarenergy, time_step):
             
             if avg_neighbour_temp > 273 and T[row, col] <= 273: #ice and water interaction -->  melting
                 Q_phase = m_ice * Lf
-                radb = 100
-                albedo = 0.99
+                radb = solarenergy*0.08 #absorption of ice
                 mb, Cpb = m_ice, Cp_ice
             elif avg_neighbour_temp <= 273 and T[row, col] > 273: #ice and water interaction -->  freezing
-                radb = 1000
-                Q_phase = m_water * Lf
-                albedo = 0.3
+                radb = solarenergy*0.6 #absorption of water
+                Q_phase = -m_water * Lf
                 mb, Cpb = m_water, Cp_water
             elif avg_neighbour_temp and T[row, col] <= 273: #both are ice --> no melting
-                radb = 100
+                radb = solarenergy*0.08 #absorption of ice
                 Q_phase = 0
-                albedo = 0.99
                 mb, Cpb = m_ice, Cp_ice
             elif avg_neighbour_temp and T[row, col] > 273: #both are water --> no freezing
-                radb = 1000
+                radb = solarenergy*0.6 #absorption of water
                 Q_phase = 0
-                albedo = 0.3
                 mb, Cpb = m_water, Cp_water
+            radb, avg_neighbour_rad= 0,0                 
+            cell=Cpb * mb * T[row, col]+ radb- Q_phase
+            avg_neighbour=avg_neighbour_temp * avg_neighbour_mCp+avg_neighbour_rad
+
+            Tf = (cell + avg_neighbour) / (Cpb * mb + avg_neighbour_mCp)
+
             
-            albedo_temp = (S / (4 * sigma) * (1 - albedo)) ** (1 / 4)
-
-
-                
-            cell=Cpb * mb * T[row, col]
-            avg_neighbour=avg_neighbour_temp * avg_neighbour_mCp
-
-            Tf = (cell + avg_neighbour - Q_phase + radb+avg_neighbour_rad) / (
-                        Cpb * mb + avg_neighbour_mCp)
-            print(cell)
-            print(avg_neighbour)
-            print(avg_neighbour_mCp)
-            print(solarenergy)
-            print(Q_phase)
             T_new[row, col] = Tf
             ice_new[row, col] = 0 if Tf > 273 else 1
 
@@ -133,8 +115,8 @@ def update_temperature(T, ice, solarenergy, time_step):
 def animate_simulation():
     global T, ice, amp, f, solarenergy
 
-    for time_step in range(time_steps):
-        T, ice, solarenergy = update_temperature(T, ice, solarenergy, time_step)
+    for time in range(Max_time):
+        T, ice, solarenergy = update_temperature(T, ice, solarenergy, time)
 
         # Set colors for ice and water
         ice_color = 'white'  # Set the color for ice (white)
@@ -146,7 +128,7 @@ def animate_simulation():
         # Plot the temperature grid
         plt.imshow(T, cmap=cmap, interpolation='nearest')
         plt.axis('off')
-        plt.title(f'Configuration at t={time_step}')
+        plt.title(f'Configuration at t={time}')
         plt.savefig('InitialConfig_1Last')
 
         ice_im[:, :, 0] = (ice == 1) * 255
@@ -155,17 +137,17 @@ def animate_simulation():
         img_sharp2 = itk.PhotoImage(image_sharp)
         img = itk.PhotoImage(ice_image)
         canvas.create_image(0, 0, anchor=NW, image=img)
-        window.title(f"Ice block with T = {solarenergy} at time step {time_step}")
+        window.title(f"Ice block with T = {solarenergy} at time step {time}")
         window.update()
-        time.sleep(0.5)
+        #time.sleep(0.5)
 
 # Simulation parameters
 N = 20
-time_steps = 200
+Max_time = 200
 n = 500
 amp, f, S, sigma = 204, 10, 1364, 5.67 * 10**(-8)
 solarenergy = 273
-Cp_water, Cp_ice, m_ice, m_water, Lf = 4186, 2.108, 917, 1000, 334
+Cp_water, Cp_ice, m_ice, m_water, Lf = 4186, 2108, 917, 1000, 334
 
 # Create the window for animation
 window = Toplevel()
